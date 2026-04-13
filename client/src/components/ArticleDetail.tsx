@@ -1,79 +1,90 @@
+import { useState } from 'react';
 import type { Article } from '../api';
 
 interface Props {
   article: Article;
   onBack: () => void;
+  isFavorited: boolean;
+  onToggleFavorite: () => void;
 }
 
-const PERSONA_COLORS: Record<string, string> = {
-  '科技小明': 'bg-blue-400',
-  '投资笔记': 'bg-amber-400',
-  '生活观察': 'bg-pink-400',
-  '深度阅读': 'bg-purple-400',
+const PERSONA_AVATARS: Record<string, { bg: string; emoji: string }> = {
+  '科技小明': { bg: 'bg-blue-500', emoji: '🔬' },
+  '投资笔记': { bg: 'bg-amber-500', emoji: '📊' },
+  '生活观察': { bg: 'bg-pink-500', emoji: '🌸' },
+  '深度阅读': { bg: 'bg-purple-500', emoji: '📚' },
 };
 
-export function ArticleDetail({ article, onBack }: Props) {
+export function ArticleDetail({ article, onBack, isFavorited, onToggleFavorite }: Props) {
+  const [closing, setClosing] = useState(false);
   const tags: string[] = article.ai_tags ? JSON.parse(article.ai_tags) : [];
   const displayTitle = article.rewritten_title || article.title;
   const displayContent = article.rewritten_content || article.content || article.summary;
   const persona = article.author_persona || article.feed_title;
-  const avatarColor = PERSONA_COLORS[persona] || 'bg-green-400';
-
-  // 判断内容是否是 markdown（改写后的）还是 HTML（原始RSS）
+  const avatar = PERSONA_AVATARS[persona] || { bg: 'bg-gray-400', emoji: persona.charAt(0) };
   const isMarkdown = article.rewritten_content != null;
 
+  const handleBack = () => {
+    setClosing(true);
+    setTimeout(onBack, 250);
+  };
+
   return (
-    <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
+    <div className={`fixed inset-0 bg-white z-50 overflow-y-auto ${closing ? 'slide-up-exit' : 'slide-up-enter'}`}>
       {/* Header */}
-      <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-2.5 flex items-center justify-between z-10">
-        <button onClick={onBack} className="p-1">
-          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+      <div className="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-[#f0f0f0] px-3 py-2.5 flex items-center justify-between z-10">
+        <button onClick={handleBack} className="p-1 -ml-1 press-scale">
+          <svg className="w-5 h-5 text-[#333]" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
 
-        {/* 作者信息 */}
         <div className="flex items-center gap-2">
-          <div className={`w-7 h-7 rounded-full ${avatarColor} flex items-center justify-center`}>
-            <span className="text-white text-xs font-bold">{persona.charAt(0)}</span>
+          <div className={`w-7 h-7 rounded-full ${avatar.bg} flex items-center justify-center`}>
+            <span className="text-white text-xs">{avatar.emoji.length > 1 ? avatar.emoji : persona.charAt(0)}</span>
           </div>
-          <span className="text-sm font-medium text-gray-800">{persona}</span>
+          <div>
+            <span className="text-sm font-semibold text-[#333]">{persona}</span>
+          </div>
         </div>
 
         <a
           href={article.link}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs text-green-600 font-medium px-3 py-1 border border-green-200 rounded-full"
+          className="text-xs text-[#ff2442] font-medium px-3 py-1 border border-[#ff2442] rounded-full press-scale"
         >
-          原文
+          关注
         </a>
       </div>
 
       {/* 封面图 */}
       {article.image_url && (
-        <img src={article.image_url} alt="" className="w-full max-h-80 object-cover" />
+        <img src={article.image_url} alt="" className="w-full max-h-[50vh] object-cover" />
       )}
 
       {/* 正文 */}
       <div className="px-4 py-4">
-        <h1 className="text-lg font-bold text-gray-900 leading-snug mb-3">
+        <h1 className="text-[17px] font-bold text-[#333] leading-snug mb-4 tracking-tight">
           {displayTitle}
         </h1>
 
         {isMarkdown ? (
-          <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap space-y-3">
+          <div className="text-[15px] text-[#555] leading-[1.8] space-y-3">
             {displayContent.split('\n').map((line, i) => {
               if (!line.trim()) return null;
-              if (line.startsWith('# ')) return <h2 key={i} className="text-base font-bold text-gray-900 mt-4">{line.slice(2)}</h2>;
-              if (line.startsWith('## ')) return <h3 key={i} className="text-sm font-bold text-gray-800 mt-3">{line.slice(3)}</h3>;
-              if (line.startsWith('- ')) return <p key={i} className="pl-3 border-l-2 border-green-300">{line.slice(2)}</p>;
+              if (line.startsWith('# '))
+                return <h2 key={i} className="text-base font-bold text-[#333] mt-5 mb-1">{line.slice(2)}</h2>;
+              if (line.startsWith('## '))
+                return <h3 key={i} className="text-[15px] font-bold text-[#333] mt-4 mb-1">{line.slice(3)}</h3>;
+              if (line.startsWith('- '))
+                return <p key={i} className="pl-3 border-l-2 border-green-300 text-[14px]">{line.slice(2)}</p>;
               return <p key={i}>{line}</p>;
             })}
           </div>
         ) : (
           <div
-            className="text-sm text-gray-700 leading-relaxed
+            className="text-[15px] text-[#555] leading-[1.8]
                        [&_img]:rounded-lg [&_img]:my-3 [&_img]:w-full
                        [&_a]:text-green-600 [&_a]:no-underline
                        [&_p]:mb-3"
@@ -82,50 +93,59 @@ export function ArticleDetail({ article, onBack }: Props) {
         )}
 
         {/* 标签 */}
-        <div className="flex flex-wrap gap-2 mt-5 mb-4">
-          {tags.map((tag) => (
-            <span
-              key={tag}
-              className="text-xs px-2.5 py-1 rounded-full bg-gray-50 text-gray-500"
-            >
-              # {tag}
-            </span>
-          ))}
-        </div>
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-6 mb-4">
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                className="text-xs text-[#2f7df4] bg-[#f0f6ff] px-2.5 py-1 rounded-sm"
+              >
+                # {tag}
+              </span>
+            ))}
+          </div>
+        )}
 
-        {/* 发布信息 */}
-        <div className="text-xs text-gray-300 mt-4 pt-4 border-t border-gray-50">
+        {/* 时间与摘要 */}
+        <div className="text-xs text-[#ccc] mt-6 pt-4 border-t border-[#f5f5f5] space-y-1">
           {article.published_at && (
-            <span>{new Date(article.published_at).toLocaleDateString('zh-CN')}</span>
+            <p>{new Date(article.published_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
           )}
           {article.ai_summary && (
-            <span className="ml-3">AI: {article.ai_summary}</span>
+            <p className="text-[#aaa]">AI: {article.ai_summary}</p>
           )}
         </div>
       </div>
 
       {/* 底部操作栏 */}
-      <div className="sticky bottom-0 bg-white border-t border-gray-100 px-4 py-3 flex items-center justify-around">
-        <div className="flex items-center gap-1 text-gray-400">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+      <div
+        className="sticky bottom-0 bg-white border-t border-[#f0f0f0] px-4 py-2.5 flex items-center gap-3"
+        style={{ paddingBottom: 'calc(12px + var(--safe-bottom))' }}
+      >
+        <input
+          type="text"
+          placeholder="说点什么..."
+          className="flex-1 px-3.5 py-2 bg-[#f5f5f5] rounded-full text-sm placeholder:text-[#ccc] focus:outline-none"
+          readOnly
+        />
+
+        <button onClick={onToggleFavorite} className="p-2 press-scale">
+          <svg
+            className={`w-6 h-6 transition-colors ${isFavorited ? 'text-[#ff2442] fill-[#ff2442]' : 'text-[#ccc]'}`}
+            fill={isFavorited ? 'currentColor' : 'none'}
+            stroke="currentColor"
+            strokeWidth={1.8}
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
           </svg>
-          <span className="text-xs">收藏</span>
-        </div>
-        <a
-          href={article.link}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-6 py-2 bg-green-500 text-white rounded-full text-sm font-medium"
-        >
-          阅读原文
+        </button>
+
+        <a href={article.link} target="_blank" rel="noopener noreferrer" className="p-2 press-scale">
+          <svg className="w-6 h-6 text-[#ccc]" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
         </a>
-        <div className="flex items-center gap-1 text-gray-400">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-          </svg>
-          <span className="text-xs">分享</span>
-        </div>
       </div>
     </div>
   );

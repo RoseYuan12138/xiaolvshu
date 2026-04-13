@@ -72,12 +72,7 @@ export async function refreshFeeds() {
   return res.json();
 }
 
-export async function triggerScore(limit = 10) {
-  const res = await fetch(`${BASE}/articles/score?limit=${limit}`, { method: 'POST' });
-  return res.json();
-}
-
-export async function triggerRewrite(limit = 10) {
-  const res = await fetch(`${BASE}/articles/rewrite?limit=${limit}`, { method: 'POST' });
+export async function searchArticles(q: string): Promise<Article[]> {
+  const res = await fetch(`${BASE}/articles/search?q=${encodeURIComponent(q)}`);
   return res.json();
 }

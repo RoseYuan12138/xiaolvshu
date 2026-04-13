@@ -104,6 +104,23 @@ router.get('/tags', (_req, res) => {
   res.json(sorted);
 });
 
+// 搜索
+router.get('/search', (req, res) => {
+  const q = req.query.q as string;
+  if (!q) { res.json([]); return; }
+  const db = getDb();
+  const articles = db.prepare(`
+    SELECT a.*, f.title as feed_title
+    FROM articles a
+    LEFT JOIN feeds f ON a.feed_id = f.id
+    WHERE a.rewritten_title LIKE ? OR a.title LIKE ? OR a.ai_tags LIKE ? OR a.ai_summary LIKE ?
+    ORDER BY a.ai_score DESC, a.published_at DESC
+    LIMIT 20
+  `).all(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+  db.close();
+  res.json(articles);
+});
+
 // 标记已读
 router.post('/:id/read', (req, res) => {
   const db = getDb();
