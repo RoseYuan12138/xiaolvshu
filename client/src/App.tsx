@@ -4,7 +4,6 @@ import { ArticleCard } from './components/ArticleCard';
 import { ArticleDetail } from './components/ArticleDetail';
 import { TagFilter } from './components/TagFilter';
 import { FeedManager } from './components/FeedManager';
-import { DailyComplete } from './components/DailyComplete';
 import { SkeletonGrid } from './components/SkeletonCard';
 import { BottomNav } from './components/BottomNav';
 import { SearchBar } from './components/SearchBar';
@@ -12,10 +11,9 @@ import { FavoritesPage } from './components/FavoritesPage';
 import { EmptyRecommend } from './components/EmptyRecommend';
 import { loadFavorites, loadReadState, saveReadCount } from './storage';
 
-const DAILY_LIMIT = 999;
-
 function App() {
   const [articles, setArticles] = useState<Article[]>([]);
+  const [totalArticles, setTotalArticles] = useState(0);
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
@@ -24,12 +22,18 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'discover' | 'favorites' | 'settings'>('discover');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Article[] | null>(null);
   const [favorites, setFavorites] = useState<Article[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [minScore, setMinScore] = useState(6);
+  const scoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pendingScore, setPendingScore] = useState(6);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const pullStartY = useRef(0);
+  const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     // 一次性迁移：localStorage → 后端
@@ -47,7 +51,6 @@ function App() {
   const favoriteIds = favorites.map(a => a.id);
 
   const toggleFavorite = async (article: Article) => {
-    // 乐观更新 UI
     setFavorites(prev => {
       const exists = prev.some(a => a.id === article.id);
       return exists ? prev.filter(a => a.id !== article.id) : [...prev, { ...article, is_favorited: 1 }];
@@ -62,6 +65,7 @@ function App() {
       fetchTags(),
     ]);
     setArticles(articleData.articles);
+    setTotalArticles(articleData.total);
     setHasMore(articleData.hasMore);
     setTags(tagData);
     setLoading(false);
@@ -84,14 +88,46 @@ function App() {
     setReadCount(loadReadState().count);
   }, []);
 
+  // IntersectionObserver 无限滚动
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadMore(); },
+      { rootMargin: '200px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore]);
+
+  // 质量滑块防抖
+  const handleScoreChange = (val: number) => {
+    setPendingScore(val);
+    if (scoreTimerRef.current) clearTimeout(scoreTimerRef.current);
+    scoreTimerRef.current = setTimeout(() => setMinScore(val), 400);
+  };
+
   const handleArticleClick = async (article: Article) => {
-    if (readCount >= DAILY_LIMIT) return;
     setSelectedArticle(article);
     if (!article.is_read) {
       await markRead(article.id);
       const newCount = readCount + 1;
       setReadCount(newCount);
       saveReadCount(newCount);
+    }
+  };
+
+  // 下拉刷新
+  const handleTouchStart = (e: React.TouchEvent) => {
+    pullStartY.current = e.touches[0].clientY;
+  };
+  const handleTouchEnd = async (e: React.TouchEvent) => {
+    const pullDistance = e.changedTouches[0].clientY - pullStartY.current;
+    const scrollTop = mainRef.current?.parentElement?.scrollTop ?? 0;
+    if (pullDistance > 80 && scrollTop <= 0 && !refreshing) {
+      setRefreshing(true);
+      await loadData();
+      setRefreshing(false);
     }
   };
 
@@ -107,8 +143,6 @@ function App() {
   };
 
   const displayArticles = searchResults ?? articles;
-
-  const allRead = readCount >= DAILY_LIMIT;
 
   return (
     <div className="min-h-screen bg-[#f7f8f5] pb-16">
@@ -127,7 +161,7 @@ function App() {
                 <h1 className="text-base font-bold text-[#1a1a1a] tracking-tight">小绿书</h1>
               </div>
               <span className="text-[11px] text-emerald-700 font-medium bg-emerald-50 px-2.5 py-1 rounded-full">
-                今日 {articles.length} 篇 · 已读 {readCount}
+                共 {totalArticles} 篇精选
               </span>
             </div>
             {/* 搜索栏 */}
@@ -136,11 +170,19 @@ function App() {
             <TagFilter tags={tags} selected={selectedTag} onSelect={setSelectedTag} />
           </header>
 
-          <main className="px-2 pt-2 pb-4">
-            {loading ? (
+          <main
+            ref={mainRef}
+            className="px-2 pt-2 pb-4"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
+            {refreshing && (
+              <div className="flex justify-center py-3">
+                <span className="text-xs text-emerald-500 animate-pulse">刷新中...</span>
+              </div>
+            )}
+            {loading && !refreshing ? (
               <SkeletonGrid />
-            ) : allRead ? (
-              <DailyComplete count={readCount} limit={DAILY_LIMIT} articles={articles} />
             ) : displayArticles.length === 0 ? (
               searchQuery ? (
                 <div className="text-center pt-28">
@@ -164,15 +206,10 @@ function App() {
                     />
                   ))}
                 </div>
+                {/* 无限滚动哨兵 */}
                 {!searchResults && hasMore && (
-                  <div className="flex justify-center py-6">
-                    <button
-                      onClick={loadMore}
-                      disabled={loadingMore}
-                      className="px-6 py-2.5 bg-white rounded-full text-sm text-emerald-600 font-medium shadow-sm press-scale disabled:opacity-50"
-                    >
-                      {loadingMore ? '加载中...' : '加载更多'}
-                    </button>
+                  <div ref={sentinelRef} className="flex justify-center py-6">
+                    {loadingMore && <span className="text-xs text-emerald-400 animate-pulse">加载中...</span>}
                   </div>
                 )}
                 {!searchResults && !hasMore && articles.length > 0 && (
@@ -223,7 +260,7 @@ function App() {
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <div className="grid grid-cols-3 text-center divide-x divide-[#f0f0f0]">
                 <div>
-                  <p className="text-xl font-bold text-emerald-600">{articles.length}</p>
+                  <p className="text-xl font-bold text-emerald-600">{totalArticles}</p>
                   <p className="text-[11px] text-[#999] mt-0.5">精选文章</p>
                 </div>
                 <div>
@@ -256,7 +293,7 @@ function App() {
                   <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center"><span className="text-base">✨</span></div>
                   <span className="text-sm text-[#333] font-medium">内容质量过滤</span>
                   <span className="ml-auto text-xs text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full font-medium">
-                    {minScore >= 8 ? '只看精品' : minScore >= 6 ? '优质内容' : minScore >= 4 ? '宽松浏览' : '全部显示'}
+                    {pendingScore >= 8 ? '只看精品' : pendingScore >= 6 ? '优质内容' : pendingScore >= 4 ? '宽松浏览' : '全部显示'}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 px-1">
@@ -265,12 +302,12 @@ function App() {
                     type="range"
                     min={1}
                     max={9}
-                    value={minScore}
-                    onChange={(e) => setMinScore(Number(e.target.value))}
+                    value={pendingScore}
+                    onChange={(e) => handleScoreChange(Number(e.target.value))}
                     className="flex-1 h-1 accent-emerald-500"
                   />
                   <span className="text-[10px] text-[#bbb] w-4">9</span>
-                  <span className="text-sm font-semibold text-emerald-600 w-8 text-right">{minScore}</span>
+                  <span className="text-sm font-semibold text-emerald-600 w-8 text-right">{pendingScore}</span>
                 </div>
               </div>
               <div className="w-full px-4 py-4 flex items-center justify-between">
@@ -289,7 +326,7 @@ function App() {
                   <path d="M12 2C8 2 4 6 4 12c0 4 2 7.5 8 10 6-2.5 8-6 8-10 0-6-4-10-8-10zm0 2c.5 0 .5 16-.5 16C8 18.5 6 16 6 12c0-4.5 2.5-8 6-8z" opacity="0.9"/>
                 </svg>
               </div>
-              <p className="text-xs text-[#bbb] font-medium">小绿书 v0.3.0</p>
+              <p className="text-xs text-[#bbb] font-medium">小绿书 v0.3.1</p>
               <p className="text-[10px] text-[#ddd] mt-0.5">只看真正好的内容</p>
             </div>
           </div>
@@ -301,7 +338,7 @@ function App() {
         active={activeTab}
         onChange={setActiveTab}
         readCount={readCount}
-        dailyLimit={DAILY_LIMIT}
+        dailyLimit={999}
       />
 
       {/* ===== 文章详情 ===== */}

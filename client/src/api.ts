@@ -1,5 +1,21 @@
 const BASE = '/api';
 
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function jsonOrThrow<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new ApiError(res.status, body || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export interface Article {
   id: number;
   feed_id: number;
@@ -14,6 +30,7 @@ export interface Article {
   ai_tags: string | null;
   ai_summary: string | null;
   is_read: number;
+  is_favorited: number;
   feed_title: string;
   rewritten_title: string | null;
   rewritten_content: string | null;
@@ -45,21 +62,22 @@ export async function fetchArticles(minScore = 6, tag?: string, offset = 0, limi
   const params = new URLSearchParams({ minScore: String(minScore), offset: String(offset), limit: String(limit) });
   if (tag) params.set('tag', tag);
   const res = await fetch(`${BASE}/articles?${params}`);
-  return res.json();
+  return jsonOrThrow(res);
 }
 
 export async function fetchTags(): Promise<Tag[]> {
   const res = await fetch(`${BASE}/articles/tags`);
-  return res.json();
+  return jsonOrThrow(res);
 }
 
 export async function markRead(id: number) {
-  await fetch(`${BASE}/articles/${id}/read`, { method: 'POST' });
+  const res = await fetch(`${BASE}/articles/${id}/read`, { method: 'POST' });
+  return jsonOrThrow(res);
 }
 
 export async function fetchFeeds(): Promise<Feed[]> {
   const res = await fetch(`${BASE}/feeds`);
-  return res.json();
+  return jsonOrThrow(res);
 }
 
 export async function addFeed(url: string, title?: string) {
@@ -68,31 +86,32 @@ export async function addFeed(url: string, title?: string) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url, title }),
   });
-  return res.json();
+  return jsonOrThrow(res);
 }
 
 export async function deleteFeed(id: number) {
-  await fetch(`${BASE}/feeds/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${BASE}/feeds/${id}`, { method: 'DELETE' });
+  return jsonOrThrow(res);
 }
 
 export async function refreshFeeds() {
   const res = await fetch(`${BASE}/feeds/refresh`, { method: 'POST' });
-  return res.json();
+  return jsonOrThrow(res);
 }
 
 export async function toggleFavorite(id: number): Promise<{ ok: boolean; is_favorited: number }> {
   const res = await fetch(`${BASE}/articles/${id}/favorite`, { method: 'POST' });
-  return res.json();
+  return jsonOrThrow(res);
 }
 
 export async function fetchFavorites(): Promise<Article[]> {
   const res = await fetch(`${BASE}/articles/favorites`);
-  return res.json();
+  return jsonOrThrow(res);
 }
 
 export async function searchArticles(q: string): Promise<Article[]> {
   const res = await fetch(`${BASE}/articles/search?q=${encodeURIComponent(q)}`);
-  return res.json();
+  return jsonOrThrow(res);
 }
 
 // ===== 评论区 =====
@@ -108,7 +127,7 @@ export interface Comment {
 
 export async function fetchComments(articleId: number): Promise<Comment[]> {
   const res = await fetch(`${BASE}/articles/${articleId}/comments`);
-  return res.json();
+  return jsonOrThrow(res);
 }
 
 export interface CommentStreamCallbacks {

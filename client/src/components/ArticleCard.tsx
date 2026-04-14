@@ -1,17 +1,12 @@
+import { useState } from 'react';
 import type { Article } from '../api';
+import { PERSONA_CONFIG } from '../constants';
 
 interface Props {
   article: Article;
   onClick: () => void;
   index: number;
 }
-
-const PERSONA_CONFIG: Record<string, { color: string; icon: string }> = {
-  '科技小明': { color: '#3b82f6', icon: '⚡' },
-  '投资笔记': { color: '#f59e0b', icon: '📈' },
-  '生活观察': { color: '#ec4899', icon: '🌿' },
-  '深度阅读': { color: '#8b5cf6', icon: '📖' },
-};
 
 // 收敛到绿色系 4 档：薄荷 / 鼠尾草 / 墨绿 / 米黄点缀
 const GRADIENTS = [
@@ -29,6 +24,7 @@ function estimateReadMinutes(article: Article): number {
 }
 
 export function ArticleCard({ article, onClick, index }: Props) {
+  const [imgFailed, setImgFailed] = useState(false);
   const displayTitle = article.rewritten_title || article.title;
   const persona = article.author_persona || article.feed_title;
   const pConfig = PERSONA_CONFIG[persona] || { color: '#6b7280', icon: persona.charAt(0) };
@@ -37,11 +33,13 @@ export function ArticleCard({ article, onClick, index }: Props) {
   const readMin = estimateReadMinutes(article);
 
   let tags: string[] = [];
-  try { tags = article.ai_tags ? JSON.parse(article.ai_tags) : []; } catch {}
+  try { tags = article.ai_tags ? JSON.parse(article.ai_tags) : []; } catch { /* empty */ }
   const primaryTag = tags[0];
 
   const aspects = ['aspect-[3/4]', 'aspect-[4/5]', 'aspect-square', 'aspect-[3/4]', 'aspect-[5/6]'];
   const coverAspect = aspects[article.id % aspects.length];
+
+  const showImage = article.image_url && !imgFailed;
 
   return (
     <div
@@ -53,20 +51,14 @@ export function ArticleCard({ article, onClick, index }: Props) {
       }}
     >
       {/* Cover */}
-      {article.image_url ? (
+      {showImage ? (
         <div className={`w-full ${coverAspect} overflow-hidden relative`}>
           <img
-            src={article.image_url}
+            src={article.image_url!}
             alt=""
             className="w-full h-full object-cover"
             loading="lazy"
-            onError={(e) => {
-              const el = e.target as HTMLImageElement;
-              const parent = el.parentElement!;
-              el.remove();
-              parent.style.background = gradient;
-              parent.innerHTML = `<div class="w-full h-full flex items-center justify-center"><span class="text-4xl opacity-40">${pConfig.icon}</span></div>`;
-            }}
+            onError={() => setImgFailed(true)}
           />
           {score != null && score >= 9 && (
             <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-white/85 backdrop-blur-sm text-emerald-700 text-[10px] font-semibold">

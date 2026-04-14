@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import type { Article, Comment } from '../api';
 import { fetchComments, postComment } from '../api';
+import { PERSONA_CONFIG } from '../constants';
 
 interface Props {
   article: Article;
@@ -9,13 +11,6 @@ interface Props {
   onToggleFavorite: () => void;
   showFavHint?: boolean;
 }
-
-const PERSONA_CONFIG: Record<string, { color: string; icon: string }> = {
-  '科技小明': { color: '#3b82f6', icon: '⚡' },
-  '投资笔记': { color: '#f59e0b', icon: '📈' },
-  '生活观察': { color: '#ec4899', icon: '🌿' },
-  '深度阅读': { color: '#8b5cf6', icon: '📖' },
-};
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -43,7 +38,7 @@ function renderMarkdown(content: string) {
         <div key={i} className="flex gap-2 pl-1 py-0.5">
           <span className="text-emerald-400 mt-1.5 text-[8px]">●</span>
           <p className="flex-1 text-[15px] text-[#444] leading-[1.75]"
-             dangerouslySetInnerHTML={{ __html: text.replace(/\*\*(.+?)\*\*/g, '<strong class="text-[#1a1a1a] font-semibold">$1</strong>') }} />
+             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(text.replace(/\*\*(.+?)\*\*/g, '<strong class="text-[#1a1a1a] font-semibold">$1</strong>')) }} />
         </div>
       );
     }
@@ -222,7 +217,7 @@ export function ArticleDetail({ article, onBack, isFavorited, onToggleFavorite, 
                        [&_img]:rounded-xl [&_img]:my-4 [&_img]:w-full
                        [&_a]:text-emerald-600 [&_a]:no-underline
                        [&_p]:mb-3"
-            dangerouslySetInnerHTML={{ __html: displayContent }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(displayContent) }}
           />
         )}
 
