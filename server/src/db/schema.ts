@@ -64,6 +64,18 @@ export function initDb() {
     db.exec('ALTER TABLE articles ADD COLUMN author_persona TEXT');
   }
 
+  // articles 收藏 + 相关度
+  if (!colNames.includes('is_favorited')) {
+    db.exec('ALTER TABLE articles ADD COLUMN is_favorited INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!colNames.includes('favorited_at')) {
+    db.exec('ALTER TABLE articles ADD COLUMN favorited_at TEXT');
+  }
+  if (!colNames.includes('ai_relevance')) {
+    db.exec('ALTER TABLE articles ADD COLUMN ai_relevance REAL');
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_articles_favorited ON articles(is_favorited)');
+
   // feeds 表新列
   const feedCols = (db.prepare("PRAGMA table_info(feeds)").all() as { name: string }[]).map(c => c.name);
   if (!feedCols.includes('platform')) {
@@ -81,6 +93,23 @@ export function initDb() {
   if (!feedCols.includes('error_count')) {
     db.exec('ALTER TABLE feeds ADD COLUMN error_count INTEGER NOT NULL DEFAULT 0');
   }
+
+  if (!feedCols.includes('is_dynamic')) {
+    db.exec('ALTER TABLE feeds ADD COLUMN is_dynamic INTEGER NOT NULL DEFAULT 0');
+  }
+
+  // 评论表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+      role TEXT NOT NULL DEFAULT 'user',
+      content TEXT NOT NULL,
+      parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_comments_article ON comments(article_id);
+  `);
 
   db.close();
 }

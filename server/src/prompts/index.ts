@@ -9,7 +9,9 @@ export {
   SCORING_TEMPERATURE,
   SCORING_MAX_TOKENS,
   MIN_CONTENT_LENGTH,
+  buildScoringPrompt,
   type ScoreResult,
+  type UserPreferences,
 } from './scoring.js';
 
 export {
@@ -24,3 +26,10 @@ export {
   MAX_CONTENT_LENGTH,
   type RewriteResult,
 } from './rewriting.js';
+
+export {
+  // 聊天
+  buildChatSystemPrompt,
+  CHAT_TEMPERATURE,
+  CHAT_MAX_TOKENS,
+} from './chat.js';
